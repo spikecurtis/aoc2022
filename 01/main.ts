@@ -1,3 +1,5 @@
+export {};
+
 const fs = require('fs');
 
 function sortDesc(a: Array<number>) {
