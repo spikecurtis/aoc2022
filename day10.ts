@@ -1,7 +1,7 @@
 export {};
 const fs = require('fs');
 
-function puzzle(data: string) {
+function parse(data: string): number[] {
     let x = 1
     let signal = []
     data.trim().split("\n").forEach(l => {
@@ -18,22 +18,20 @@ function puzzle(data: string) {
         }
         throw "unhittable"
     })
-    const p1 = [20, 60, 100, 140, 180, 220].reduce((s, i) => {
-        const x = signal[i-1]
-        const y = i*x
-        return s + y
-    }, 0)
+    return signal;
+}
+
+function puzzle(data: string) {
+    let signal = parse(data);
+    const p1 = [20, 60, 100, 140, 180, 220].reduce(
+        (s, i) => s + i*signal[i-1], 0)
     console.log("Part One:", p1)
 
     console.log("Part Two:")
     let output = ""
     for (let i=0; i<240; i++) {
         let pp = i % 40
-        if (Math.abs(signal[i] - pp) <= 1) {
-            output += "#"
-        } else {
-            output += "."
-        }
+        output += (Math.abs(signal[i] - pp) <= 1) ? "#" : "."
         if (pp == 39) {
             output += "\n"
         }
