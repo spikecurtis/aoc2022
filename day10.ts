@@ -31,7 +31,7 @@ function puzzle(data: string) {
     let output = ""
     for (let i=0; i<240; i++) {
         let pp = i % 40
-        output += (Math.abs(signal[i] - pp) <= 1) ? "#" : "."
+        output += (Math.abs(signal[i] - pp) <= 1) ? "█" : " "
         if (pp == 39) {
             output += "\n"
         }
