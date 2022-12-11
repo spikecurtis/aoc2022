@@ -67,6 +67,12 @@ function puzzle1(data: string) {
 function puzzle2(data: string) {
     const monkeys = data.trim().split("\n\n").map(m => new Monkey(m))
     monkeys.forEach(m => m.monkeys = monkeys)
+    // we can reduce worry by taking modulus of a common multiple of all divisors
+    // the least common multiple gives the smallest modulus, but any common multiple
+    // is fine, so just multiply the divisors
+    //
+    // this works because addition and multiplication in modular arithmetic
+    // correspond to addition and multiplication of the ordinary integers
     const k = monkeys.reduce((a, m) => a * m.divisor, 1)
     for (let round = 1; round <= 10000; round ++) {
         monkeys.forEach(m => m.takeTurn(w => w % k))
