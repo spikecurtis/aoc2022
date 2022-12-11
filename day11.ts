@@ -3,50 +3,8 @@ import {isNumber} from "util";
 export {};
 const fs = require('fs');
 
-class Item {
-    init: number
-    mods: {set, get, forEach}
-
-    constructor(n: number) {
-        this.init = n
-        this.mods = new Map()
-    }
-
-    setMods(mods: number[]) {
-        mods.forEach(m => this.mods.set(m, this.init % m))
-    }
-
-    addN(n: number) {
-        this.mods.forEach((v, k, map) => {
-            map.set(k, (v+n) % k)
-        })
-    }
-
-    multN(n: number) {
-        this.mods.forEach((v, k, map) => {
-            map.set(k, (v*n) % k)
-        })
-    }
-
-    addOld() {
-        this.mods.forEach((v, k, map) => {
-            map.set(k, (v+v) % k)
-        })
-    }
-
-    multOld() {
-        this.mods.forEach((v, k, map) => {
-            map.set(k, (v*v) % k)
-        })
-    }
-
-    divisibleBy(k: number) {
-        return this.mods.get(k) == 0
-    }
-}
-
 class Monkey {
-    items: Item[]
+    items: number[]
     operation: string
     operand: number|"old"
     divisor: number
@@ -56,7 +14,7 @@ class Monkey {
     monkeys: Monkey[]
     constructor(t: string) {
         const parts = t.trim().split("\n").map(l => l.trim().split(" "))
-        this.items = parts[1].slice(2).map(n => new Item(parseInt(n.trim().split(",")[0])))
+        this.items = parts[1].slice(2).map(n => parseInt(n.trim().split(",")[0]))
         this.operation = parts[2][4]
         let o = parts[2][5]
         if (o != "old") {
@@ -69,51 +27,53 @@ class Monkey {
         this.falseTarget = parseInt(parts[5][5])
         this.inspections = 0
     }
-    takeTurn() {
+    takeTurn(reduceWorry: (w: number) => number) {
         while (this.items.length > 0) {
             this.inspections ++
             let item = this.items.shift()
-            this.newWorry(item)
-            //item = Math.floor(item/3)
+            item = this.newWorry(item)
+            item = reduceWorry(item)
 
-            let target = item.divisibleBy(this.divisor) ? this.trueTarget : this.falseTarget
+            let target = (item % this.divisor == 0) ? this.trueTarget : this.falseTarget
             this.monkeys[target].items.push(item)
         }
     }
-    newWorry(w: Item) {
+    newWorry(w: number) {
+        let operand = w
+        if (this.operand != "old") {
+            operand = this.operand
+        }
         switch (this.operation) {
             case "*":
-                if (this.operand != "old") {
-                    w.multN(this.operand)
-                } else {
-                    w.multOld()
-                }
-                return
+                return w * operand
             case "+":
-                if (this.operand != "old") {
-                    w.addN(this.operand)
-                } else {
-                    w.addOld()
-                }
-                return
+                return w + operand
         }
         throw "unhittable"
     }
 }
 
-function puzzle(data: string) {
+function puzzle1(data: string) {
     const monkeys = data.trim().split("\n\n").map(m => new Monkey(m))
-    const divisors = monkeys.map(m => m.divisor)
-    monkeys.forEach(m => {
-        m.monkeys = monkeys
-        m.items.forEach(i => i.setMods(divisors))
-    })
-    for (let round = 1; round <= 10000; round ++) {
-        monkeys.forEach(m => m.takeTurn())
+    monkeys.forEach(m => m.monkeys = monkeys)
+    for (let round = 1; round <= 20; round ++) {
+        monkeys.forEach(m => m.takeTurn(w => Math.floor(w/3)))
     }
     let inspections = monkeys.map(m => m.inspections)
     inspections.sort((a, b) => b-a)
-    console.log(inspections[0]*inspections[1])
+    console.log("Part One:", inspections[0]*inspections[1])
+}
+
+function puzzle2(data: string) {
+    const monkeys = data.trim().split("\n\n").map(m => new Monkey(m))
+    monkeys.forEach(m => m.monkeys = monkeys)
+    const k = monkeys.reduce((a, m) => a * m.divisor, 1)
+    for (let round = 1; round <= 10000; round ++) {
+        monkeys.forEach(m => m.takeTurn(w => w % k))
+    }
+    let inspections = monkeys.map(m => m.inspections)
+    inspections.sort((a, b) => b-a)
+    console.log("Part Two:", inspections[0]*inspections[1])
 }
 
 fs.readFile('input11', 'utf8', (err, data) => {
@@ -121,7 +81,8 @@ fs.readFile('input11', 'utf8', (err, data) => {
     console.error(err);
     return;
   }
-  puzzle(data);
+  puzzle1(data);
+  puzzle2(data);
 });
 
 const tc = `addx 15
