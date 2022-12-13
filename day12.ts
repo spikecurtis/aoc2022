@@ -28,42 +28,6 @@ function parse(data): {start, end, height} {
   return {start, end, height}
 }
 
-class DefaultMap {
-  def: number
-  map: {set, get, has, forEach, delete, size}
-  constructor(def: number) {
-    this.def = def
-    this.map = new Map()
-  }
-  get(k) {
-    const v = this.map.get(k)
-    if (v === undefined) {
-      return this.def
-    }
-    return v
-  }
-  set(k, v) {
-    this.map.set(k, v)
-  }
-  lowest() {
-    let bv = Infinity
-    let bk = undefined
-    this.map.forEach((v, k, map) => {
-      if (v < bv) {
-        bk = k
-        bv = v
-      }
-    })
-    return bk
-  }
-  delete(k) {
-    this.map.delete(k)
-  }
-  size() {
-    return this.map.size()
-  }
-}
-
 function blockDistance(n, end): number {
   return Math.abs(n.x - end.x) + Math.abs(n.y - end.y)
 }
