@@ -1,5 +1,6 @@
 export {};
 const fs = require('fs');
+const Heap = require('heap')
 
 const timeLimit = 30
 
@@ -13,31 +14,51 @@ interface Node {
   action: (Action|null)[]
   location: Room[]
   rmap: {get: (string) => Room}
-  minute: number
+  minute: number[]
   closed: Room[]
   max: number
   min: number
   confirmed: number
 }
 
-interface Action {
-  open: boolean
-  move: string|undefined
-}
+type Action = string
 
 let explores = 0
+
+var shortestPaths = new Map()
+function minutesTo(rmap: any, from: Room, to: Room): number {
+  if (shortestPaths.has(from.name)) {
+    return shortestPaths.get(from.name).get(to.name)
+  }
+  const open = new Heap((a,b) => a.cost - b.cost)
+  open.push({room: from, cost: 0})
+  const closed = new Map()
+  while (!open.empty()) {
+    let item = open.pop()
+    // add one to account for opening valve
+    closed.set(item.room.name, item.cost + 1)
+    for (const name of item.room.tunnels) {
+      if (closed.has(name)) {
+        continue
+      }
+      open.push({room: rmap.get(name), cost: item.cost+1})
+    }
+  }
+  shortestPaths.set(from.name, closed)
+  return closed.get(to.name)
+}
 
 class Node {
   action: (Action|null)[]
   location: Room[]
   rmap: {get: (string) => Room}
-  minute: number
+  minute: number[]
   actions: Action[][]
   closed: Room[]
   max: number
   min: number
   confirmed: number
-  constructor(rmap, confirmed, action, location, minute, closed, actions) {
+  constructor(rmap, confirmed, action: Action[], location: Room[], minute: number[], closed, actions) {
     this.rmap = rmap
     this.action = action
     this.location = location
@@ -46,39 +67,52 @@ class Node {
     this.closed = closed
     this.confirmed = confirmed
     for (let w = 0; w< action.length; w++) {
-      if (action[w] != null && action[w].open) {
-        this.confirmed += location[w].rate * (timeLimit - minute)
+      if (action[w] != null) {
+        this.confirmed += location[w].rate * (timeLimit - minute[w])
       }
     }
-    this.max = this.getMax(actions.length)
+    this.max = this.getMax()
     this.min = this.confirmed
   }
-  getMax(workers): number {
-    // the next time we could possibly open a valve is 1 minute from
-    // now, then 2 minutes after, etc
+  getMax(): number {
     let max = this.confirmed
     let closed = Array.from(this.closed).
       sort((a,b) => a.rate - b.rate)
-    for (let m = timeLimit - this.minute - 1; m > 0 && closed.length > 0; m -= 2) {
-      for (let w = 0; w<workers && closed.length>0; w++) {
-        max += closed.pop().rate * m
-      }
+    // for (let w = 0; w<workers && closed.length>0; w++) {
+    //     for (let m = timeLimit - this.minute[w] - 2; m > 0 && closed.length > 0; m -= 2) {
+    //       max += closed.pop().rate * m
+    //   }
+    // }
+    const minutes = []
+    // the next time we could possibly open a valve is 2 minutes from
+    // now, then 2 minutes after, etc
+    for (let x = 2; x < 30; x+=2) {
+      this.minute.forEach(minute => {
+        const left = timeLimit - x - minute
+        if (left > 0) {
+          minutes.push(left)
+        }
+      })
+    }
+    minutes.sort((a,b) => a-b)
+    while (minutes.length > 0 && closed.length > 0) {
+      max += closed.pop().rate * minutes.pop()
     }
     return max
   }
   childFromAction(action: Action[]): Node {
     let location = Array.from(this.location)
     const actions = Array.from(this.actions)
+    const minute = Array.from(this.minute)
     actions.push(action)
     let closed = Array.from(this.closed)
     for (let w=0; w<action.length; w++) {
-      if (action[w].open) {
-        closed = closed.filter(r => r.name != this.location[w].name)
-      } else {
-        location[w] = this.rmap.get(action[w].move)
+      if (action[w] != null) {
+        closed = closed.filter(r => r.name != action[w])
+        location[w] = this.rmap.get(action[w])
+        minute[w] = minute[w] += minutesTo(this.rmap, this.location[w], location[w])
       }
     }
-    const minute = this.minute + 1
     return new Node(this.rmap, this.confirmed, action, location, minute, closed, actions)
   }
 
@@ -86,12 +120,9 @@ class Node {
     const children = []
     const workerActions = []
     for (let w = 0; w<this.location.length; w++) {
-      const actions = this.location[w].tunnels.map(name => {
-        return {open: false, move: name}
-      })
-      if (this.location[w].rate > 0 && this.closed.find(r => r.name == this.location[w].name)) {
-        actions.push({open: true, move: ""})
-      }
+      const actions = this.closed.
+        filter(r => (this.minute[w] + minutesTo(this.rmap, this.location[w], r)) < 30).
+        map(r => r.name)
       workerActions.push(actions)
     }
     const combinations = (aa: Action[][]) => {
@@ -108,7 +139,15 @@ class Node {
       })
       return out
     }
-    combinations(workerActions).forEach(a =>{
+    combinations(workerActions).forEach(a => {
+      // must all be unique
+      const s = new Set()
+      for (const act of a) {
+        s.add(act)
+      }
+      if (s.size != a.length) {
+        return
+      }
       children.push(this.childFromAction(a))
     })
     return children
@@ -116,9 +155,9 @@ class Node {
 
   explore(bestMin: number) {
     explores++
-    if (this.minute == timeLimit) {
-      return
-    }
+    // if (this.minute == timeLimit) {
+    //   return
+    // }
     let toExplore = Array.from(this.getChildren()).
       sort((a,b) => a.max - b.max)
     //bestMin = toExplore.reduce((p, c) => Math.max(p, c.min), bestMin)
@@ -165,11 +204,24 @@ function puzzle(data: string) {
   const rooms = parse(data)
   const rmap = new Map()
   rooms.forEach(r => rmap.set(r.name, r))
-  const root = new Node(rmap, 0, [null], [rmap.get("AA")], 0, Array.from(rooms), [])
+  const closed = Array.from(rooms).filter(r => r.rate > 0)
+  const root = new Node(rmap, 0,
+      [null],
+      [rmap.get("AA")],
+      [0],
+      closed,
+      [])
   root.explore(root.min)
 
   console.log("Part One:", root.min, explores)
-  console.log("Part Two:")
+  const root2 = new Node(rmap, 0,
+      [null, null],
+      [rmap.get("AA"), rmap.get("AA")],
+      [4,4],
+      closed,
+      [])
+  root2.explore(root2.min)
+  console.log("Part Two:", root2.min, explores)
 }
 
 fs.readFile('input16', 'utf8', (err, data) => {
